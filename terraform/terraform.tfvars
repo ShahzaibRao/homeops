@@ -1,8 +1,8 @@
 vms = {
   "dockerserver" = {
     node       = "pve1"
-    cores      = 2
-    memory     = 1024
+    cores      = 4
+    memory     = 2048
     disk_size  = "15G"
     ip_address = "192.168.2.82"
   }
