@@ -15,7 +15,7 @@ vms = {
   },
   "ansible" = {
     node       = "pve1"
-    cores      = 2
+    cores      = 1
     memory     = 1024
     disk_size  = "15G"
     ip_address = "192.168.2.84"
