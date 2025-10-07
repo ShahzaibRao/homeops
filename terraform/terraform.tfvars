@@ -5,13 +5,6 @@ vms = {
     memory     = 1024
     disk_size  = "15G"
     ip_address = "192.168.2.82"
-  },
-  "new-test" = {
-    node       = "pve1"
-    cores      = 2
-    memory     = 1024
-    disk_size  = "15G"
-    ip_address = "192.168.2.87"
   }
 
 
