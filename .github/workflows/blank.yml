@@ -32,13 +32,14 @@ jobs:
 
       - name: Terraform Format
         id: fmt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           terraform fmt -recursive
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           git add .
-          git diff-index --quiet HEAD || git commit -m "Automated: Fix terraform formatting"
-          git push
+          git diff-index --quiet HEAD || (git commit -m "Automated: Fix terraform formatting" && git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git && git push)
         continue-on-error: true
 
       - name: Terraform Validate
@@ -60,12 +61,15 @@ jobs:
 
       - name: Copy Inventory File
         if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cp inventory.ini ../ansible/
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           git add ../ansible/inventory.ini
           git commit -m "Update Ansible inventory after Terraform apply"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git push   
 
 
