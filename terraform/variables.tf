@@ -41,13 +41,3 @@ variable "proxmox_password" {
   type        = string
   sensitive   = true
 }
-variable "r2_access_key" {
-  description = "R2 access key"
-  type        = string
-}
-
-variable "r2_secret_key" {
-  description = "R2 secret key"
-  type        = string
-  sensitive   = true
-}
