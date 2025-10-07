@@ -46,7 +46,7 @@ jobs:
           git pull origin main --rebase
           git stash pop
           git add .
-          git diff-index --quiet HEAD || (git commit -m "Automated: Fix terraform formatting" && git push "https://$GITHUB_ACTOR:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git" HEAD:main)
+          git diff-index --quiet HEAD || (git commit -m "Automated: Fix terraform formatting" && git push origin HEAD:main)
         continue-on-error: true
 
       - name: Terraform Validate
@@ -78,6 +78,6 @@ jobs:
           git pull origin main --rebase
           git stash pop
           git add ../ansible/inventory.ini inventory.ini
-          git diff-index --quiet HEAD || (git commit -m "Update Ansible inventory after Terraform apply" && git push "https://$GITHUB_ACTOR:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git" HEAD:main)
+          git diff-index --quiet HEAD || (git commit -m "Update Ansible inventory after Terraform apply" && git push origin HEAD:main)
 
 
