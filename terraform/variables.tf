@@ -1,11 +1,11 @@
 variable "vms" {
   description = "Map of VM configurations"
   type = map(object({
-    node        = string
-    cores       = number
-    memory      = number
-    disk_size   = string
-    ip_address  = string
+    node       = string
+    cores      = number
+    memory     = number
+    disk_size  = string
+    ip_address = string
   }))
 }
 

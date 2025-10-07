@@ -12,14 +12,14 @@ resource "proxmox_vm_qemu" "vm" {
   automatic_reboot = true
 
   # Cloud-init configuration
-  os_type       = "cloud-init"
-  ciupgrade     = true
-  searchdomain  = " "
-  ipconfig0     = "ip=${var.ip_address}/24,gw=${var.gateway}"
-  skip_ipv6     = true
-  ciuser        = var.ssh_user
-  cipassword    = var.ssh_password
-  sshkeys       = var.ssh_keys
+  os_type      = "cloud-init"
+  ciupgrade    = true
+  searchdomain = " "
+  ipconfig0    = "ip=${var.ip_address}/24,gw=${var.gateway}"
+  skip_ipv6    = true
+  ciuser       = var.ssh_user
+  cipassword   = var.ssh_password
+  sshkeys      = var.ssh_keys
 
   serial {
     id = 0

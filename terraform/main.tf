@@ -1,6 +1,6 @@
 module "proxmox_vm" {
   source = "./modules/proxmox-vm"
-  
+
   for_each = var.vms
 
   name        = each.key

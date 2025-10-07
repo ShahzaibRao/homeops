@@ -12,7 +12,7 @@ locals {
         "master" = [for name, vm in module.proxmox_vm : { name = name, ip = split("/", split("=", vm.ip_address)[1])[0] } if can(regex("^master", name))],
         "worker" = [for name, vm in module.proxmox_vm : { name = name, ip = split("/", split("=", vm.ip_address)[1])[0] } if can(regex("^worker", name))],
         "nodes"  = [for name, vm in module.proxmox_vm : { name = name, ip = split("/", split("=", vm.ip_address)[1])[0] } if !can(regex("^(master|worker)", name))]
-      } : concat(
+        } : concat(
         ["[${role}]"],
         [for instance in instances : "${instance.name} ansible_host=${instance.ip} ansible_user=${var.ssh_user}"],
         [""]

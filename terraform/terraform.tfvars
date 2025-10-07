@@ -7,7 +7,7 @@ vms = {
     ip_address = "192.168.2.81"
   }
 
-  
+
 }
 
 ssh_user         = "rao"

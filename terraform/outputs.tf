@@ -15,8 +15,8 @@ output "vm_ids" {
 output "ansible_inventory" {
   value = join("\n", concat(
     ["[nodes]"],
-    [for name, vm in module.proxmox_vm : 
-      "${name} ansible_host=${split("/", split("=", vm.ip_address)[1])[0]} ansible_user=${var.ssh_user}"]
+    [for name, vm in module.proxmox_vm :
+    "${name} ansible_host=${split("/", split("=", vm.ip_address)[1])[0]} ansible_user=${var.ssh_user}"]
   ))
   description = "Ansible inventory content"
 }
