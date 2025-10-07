@@ -18,10 +18,9 @@ terraform {
     skip_requesting_account_id  = true
     skip_s3_checksum            = true
     use_path_style              = true
-    #access_key                  = "749cc9af1b2279d99a81b317fba49ba4"
-    #secret_key                  = "c869bf7afca8a3a652f35d354504978e88095b344ae1384360d7d14f183d4ea3"
-    access_key                  = var.r2_access_key
-    secret_key                  = var.r2_secret_key
+
+    # DO NOT put credentials here. Provide them via env vars or -backend-config.
+    # Cloudflare R2 endpoint (S3-compatible)
     endpoints = {
       s3 = "https://70bb4330aeae9769fe3c30a1e167a06d.r2.cloudflarestorage.com"
     }
