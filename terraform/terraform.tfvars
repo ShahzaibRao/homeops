@@ -3,14 +3,14 @@ vms = {
     node       = "pve1"
     cores      = 4
     memory     = 2048
-    disk_size  = "15G"
+    disk_size  = "20G"
     ip_address = "192.168.2.60"
   },
   "worker-k3s" = {
     node       = "pve1"
     cores      = 4
     memory     = 2048
-    disk_size  = "15G"
+    disk_size  = "20G"
     ip_address = "192.168.2.61"
   }
 
