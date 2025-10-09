@@ -4,14 +4,14 @@ vms = {
         cores = 4
         memory = 3072
         disk_size = 20 
-        ip = "192.168.2.35"
+        ip_address = "192.168.2.35"
     },
     "master-k3s" = {
         node = "pve1"
         cores = 4
         memory = 3072
         disk_size = 20 
-        ip = "192.168.2.36"
+        ip_address = "192.168.2.36"
     }
     
 }
