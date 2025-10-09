@@ -9,7 +9,7 @@ vms = {
     "master-k3s" = {
         node = "pve1"
         cores = 4
-        memory = 372
+        memory = 3072
         disk_size = 20 
         ip = "192.168.2.36"
     }
