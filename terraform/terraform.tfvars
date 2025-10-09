@@ -1,10 +1,10 @@
 vms = {
-  "k3s-cluster-lb" = {
+  "k3s-lab" = {
     node       = "pve1"
     cores      = 4
     memory     = 6144
     disk_size  = "30G"
-    ip_address = "192.168.2.62"
+    ip_address = "192.168.2.63"
   }
 
 }
