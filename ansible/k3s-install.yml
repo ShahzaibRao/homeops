@@ -4,9 +4,14 @@
   become: yes
   serial: 1
   vars:
+    # --- Core cluster logic ---
     first_master: "{{ groups['master'][0] }}"
     is_first_master: "{{ inventory_hostname == first_master }}"
     first_master_ip: "{{ hostvars[first_master].ansible_host }}"
+
+    # --- Fix undefined vars ---
+    kube_user: "{{ ansible_user }}"
+    home_directory: "{{ (ansible_user == 'root') | ternary('/root', '/home/' + ansible_user) }}"
 
   tasks:
     - name: Update system packages
@@ -22,7 +27,7 @@
         sh -
       args:
         executable: /bin/bash
-        creates: /usr/local/bin/k3s  # ← Only run if not installed
+        creates: /usr/local/bin/k3s   # skip if installed
       when: is_first_master | bool
 
     - name: Wait for etcd and API server to be ready (first master)
@@ -56,10 +61,11 @@
         sh -
       args:
         executable: /bin/bash
-        creates: /usr/local/bin/k3s  # ← Skip if already installed
+        creates: /usr/local/bin/k3s   # skip if installed
       when: not is_first_master | bool
 
     - name: Configure kubectl on FIRST master
+      when: is_first_master | bool
       block:
         - name: Create .kube directory
           file:
@@ -89,8 +95,8 @@
             line: 'export KUBECONFIG=$HOME/.kube/config'
             state: present
           become: no
-      when: is_first_master | bool
 
+# --- Worker nodes ---
 - name: Install K3s on worker nodes
   hosts: worker
   become: yes
@@ -113,4 +119,4 @@
         sh -
       args:
         executable: /bin/bash
-        creates: /usr/local/bin/k3s  # ← Skip if already installed
+        creates: /usr/local/bin/k3s   # skip if installed
