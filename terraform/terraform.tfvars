@@ -4,7 +4,7 @@ vms = {
     cores      = 4
     memory     = 2048
     disk_size  = "15G"
-    ip_address = "192.168.2.81"
+    ip_address = "192.168.2.82"
   }
 }
 
