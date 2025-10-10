@@ -1,5 +1,5 @@
 vms = {
- "master" = {
+  "master" = {
     node       = "pve1"
     cores      = 4
     memory     = 2048
