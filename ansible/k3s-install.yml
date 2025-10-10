@@ -1,17 +1,26 @@
 ---
+# =====================================================================
+#  PLAY 1 - Install K3s on Master Nodes
+# =====================================================================
 - name: Install K3s on master nodes (etcd always, Traefik enabled)
   hosts: master
   become: yes
   serial: 1
   vars:
-    # --- Core cluster logic ---
+    # Identify first master and cluster info
     first_master: "{{ groups['master'][0] }}"
     is_first_master: "{{ inventory_hostname == first_master }}"
     first_master_ip: "{{ hostvars[first_master].ansible_host }}"
 
-    # --- Fix undefined vars ---
+    # Handle home directory and user dynamically
     kube_user: "{{ ansible_user }}"
     home_directory: "{{ (ansible_user == 'root') | ternary('/root', '/home/' + ansible_user) }}"
+
+  pre_tasks:
+    # Optional but useful: automatically trust SSH host keys (for CI/CD)
+    - name: Disable host key checking (only in CI)
+      set_fact:
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
 
   tasks:
     - name: Update system packages
@@ -27,7 +36,7 @@
         sh -
       args:
         executable: /bin/bash
-        creates: /usr/local/bin/k3s   # skip if installed
+        creates: /usr/local/bin/k3s
       when: is_first_master | bool
 
     - name: Wait for etcd and API server to be ready (first master)
@@ -61,7 +70,7 @@
         sh -
       args:
         executable: /bin/bash
-        creates: /usr/local/bin/k3s   # skip if installed
+        creates: /usr/local/bin/k3s
       when: not is_first_master | bool
 
     - name: Configure kubectl on FIRST master
@@ -96,13 +105,20 @@
             state: present
           become: no
 
-# --- Worker nodes ---
+# =====================================================================
+#  PLAY 2 - Install K3s on Worker Nodes
+# =====================================================================
 - name: Install K3s on worker nodes
   hosts: worker
   become: yes
   vars:
     first_master: "{{ groups['master'][0] }}"
     first_master_ip: "{{ hostvars[first_master].ansible_host }}"
+
+  pre_tasks:
+    - name: Disable host key checking (only in CI)
+      set_fact:
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
 
   tasks:
     - name: Update system packages
@@ -119,4 +135,4 @@
         sh -
       args:
         executable: /bin/bash
-        creates: /usr/local/bin/k3s   # skip if installed
+        creates: /usr/local/bin/k3s
