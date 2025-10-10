@@ -1,0 +1,116 @@
+---
+- name: Install K3s on master nodes (etcd always, Traefik enabled)
+  hosts: master
+  become: yes
+  serial: 1
+  vars:
+    first_master: "{{ groups['master'][0] }}"
+    is_first_master: "{{ inventory_hostname == first_master }}"
+    first_master_ip: "{{ hostvars[first_master].ansible_host }}"
+
+  tasks:
+    - name: Update system packages
+      package:
+        name: "*"
+        state: latest
+      when: ansible_os_family in ["Debian", "RedHat"]
+
+    - name: Install K3s on FIRST master (bootstrap etcd)
+      shell: |
+        curl -sfL https://get.k3s.io | \
+        INSTALL_K3S_EXEC="server --cluster-init" \
+        sh -
+      args:
+        executable: /bin/bash
+        creates: /usr/local/bin/k3s  # ← Only run if not installed
+      when: is_first_master | bool
+
+    - name: Wait for etcd and API server to be ready (first master)
+      command: k3s kubectl get --raw='/readyz?verbose'
+      register: ready_check
+      until: "'etcd' in ready_check.stdout and 'ok' in ready_check.stdout"
+      retries: 15
+      delay: 8
+      when: is_first_master | bool
+      run_once: true
+      delegate_to: "{{ first_master }}"
+
+    - name: Read node token from first master
+      slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_token
+      when: is_first_master | bool
+
+    - name: Share token with other plays
+      set_fact:
+        k3s_node_token: "{{ k3s_token.content | b64decode | trim }}"
+      when: is_first_master | bool
+      delegate_to: localhost
+      run_once: true
+
+    - name: Install K3s on ADDITIONAL masters (join etcd cluster)
+      shell: |
+        curl -sfL https://get.k3s.io | \
+        K3S_TOKEN={{ hostvars[first_master].k3s_node_token }} \
+        INSTALL_K3S_EXEC="server --server https://{{ first_master_ip }}:6443" \
+        sh -
+      args:
+        executable: /bin/bash
+        creates: /usr/local/bin/k3s  # ← Skip if already installed
+      when: not is_first_master | bool
+
+    - name: Configure kubectl on FIRST master
+      block:
+        - name: Create .kube directory
+          file:
+            path: "{{ home_directory }}/.kube"
+            state: directory
+            owner: "{{ kube_user }}"
+            mode: '0700'
+
+        - name: Copy kubeconfig
+          copy:
+            src: /etc/rancher/k3s/k3s.yaml
+            dest: "{{ home_directory }}/.kube/config"
+            remote_src: yes
+            owner: "{{ kube_user }}"
+            mode: '0600'
+
+        - name: Replace 127.0.0.1 with master IP
+          replace:
+            path: "{{ home_directory }}/.kube/config"
+            regexp: '127\.0\.0\.1'
+            replace: "{{ first_master_ip }}"
+          become: no
+
+        - name: Add KUBECONFIG to .bashrc
+          lineinfile:
+            path: "{{ home_directory }}/.bashrc"
+            line: 'export KUBECONFIG=$HOME/.kube/config'
+            state: present
+          become: no
+      when: is_first_master | bool
+
+- name: Install K3s on worker nodes
+  hosts: worker
+  become: yes
+  vars:
+    first_master: "{{ groups['master'][0] }}"
+    first_master_ip: "{{ hostvars[first_master].ansible_host }}"
+
+  tasks:
+    - name: Update system packages
+      package:
+        name: "*"
+        state: latest
+      when: ansible_os_family in ["Debian", "RedHat"]
+
+    - name: Install K3s agent
+      shell: |
+        curl -sfL https://get.k3s.io | \
+        K3S_URL=https://{{ first_master_ip }}:6443 \
+        K3S_TOKEN={{ hostvars[first_master].k3s_node_token }} \
+        sh -
+      args:
+        executable: /bin/bash
+        creates: /usr/local/bin/k3s  # ← Skip if already installed
