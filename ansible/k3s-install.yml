@@ -1,5 +1,27 @@
 ---
 # =====================================================================
+#  PLAY 0 - Configure DNS on All Nodes
+# =====================================================================
+- name: Configure DNS resolvers on all nodes
+  hosts: all
+  become: yes
+  tasks:
+    - name: Remove existing resolv.conf
+      file:
+        path: /etc/resolv.conf
+        state: absent
+
+    - name: Create new resolv.conf with Google and Cloudflare DNS
+      copy:
+        dest: /etc/resolv.conf
+        content: |
+          nameserver 8.8.8.8
+          nameserver 1.1.1.1
+        owner: root
+        group: root
+        mode: '0644'
+
+# =====================================================================
 #  PLAY 1 - Install K3s on Master Nodes
 # =====================================================================
 - name: Install K3s on master nodes (etcd always, Traefik enabled)
@@ -7,17 +29,14 @@
   become: yes
   serial: 1
   vars:
-    # Identify first master and cluster info
     first_master: "{{ groups['master'][0] }}"
     is_first_master: "{{ inventory_hostname == first_master }}"
     first_master_ip: "{{ hostvars[first_master].ansible_host }}"
 
-    # Handle home directory and user dynamically
     kube_user: "{{ ansible_user }}"
     home_directory: "{{ (ansible_user == 'root') | ternary('/root', '/home/' + ansible_user) }}"
 
   pre_tasks:
-    # Optional but useful: automatically trust SSH host keys (for CI/CD)
     - name: Disable host key checking (only in CI)
       set_fact:
         ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
