@@ -1,5 +1,5 @@
 vms = {
-"master-k3s-1" = {
+  "master-k3s-1" = {
     node       = "pve1"
     cores      = 4
     memory     = 2048
@@ -13,7 +13,7 @@ vms = {
     disk_size  = "15G"
     ip_address = "192.168.2.122"
   },
-"worker-k3s-1" = {
+  "worker-k3s-1" = {
     node       = "pve1"
     cores      = 2
     memory     = 1024
