@@ -1,7 +1,4 @@
 vms = {
-<<<<<<< HEAD
-
-=======
   "master-k3s-1" = {
     node       = "pve1"
     cores      = 4
@@ -23,7 +20,7 @@ vms = {
     disk_size  = "15G"
     ip_address = "192.168.2.132"
   }
->>>>>>> 095d1dc (k3s deplyment)
+
 }
 
 
