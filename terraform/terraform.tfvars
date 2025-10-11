@@ -1,6 +1,6 @@
 vms = {
 
-"master-k3s-1" = {
+  "master-k3s-1" = {
     node       = "pve1"
     cores      = 4
     memory     = 6144
