@@ -1,11 +1,11 @@
 vms = {
 
-  "master-k3s-1" = {
+  "master-k3s" = {
     node       = "pve1"
     cores      = 4
     memory     = 6144
     disk_size  = "30G"
-    ip_address = "192.168.2.169"
+    ip_address = "192.168.2.191"
   }
 
 }
