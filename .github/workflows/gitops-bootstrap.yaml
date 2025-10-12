@@ -135,7 +135,7 @@ jobs:
           cat <<EOF > cloudflared-values.yaml
           cloudflared:
             tunnelName: "gitops-k3s-tunnel"
-            tunnelId: "$TUNNEL_ID"
+            tunnelId: "${TUNNEL_ID}"
             secretName: "tunnel-credentials"
             config:
               ingress:
