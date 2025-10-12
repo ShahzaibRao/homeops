@@ -41,7 +41,7 @@ jobs:
         id: ensure_tunnel
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -e
@@ -54,7 +54,7 @@ jobs:
             echo "🆕 No tunnel found, creating new one..."
             
             RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/cfd_tunnel" \
-              -H "Authorization: Bearer ${CF_API_TOKEN}" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               -H "Content-Type: application/json" \
               --data '{"name": "gitops-k3s-tunnel"}')
 
@@ -66,7 +66,7 @@ jobs:
 
             # Download credentials JSON
             curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/cfd_tunnel/${TUNNEL_ID}/credentials" \
-              -H "Authorization: Bearer ${CF_API_TOKEN}" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               -o tunnel.json
 
             # Save both ID and JSON as GitHub Secrets for future runs
@@ -94,7 +94,7 @@ jobs:
 
           kubectl create secret generic cloudflare-api-token \
             -n external-dns \
-            --from-literal=api-token=${{ secrets.CF_API_TOKEN }} \
+            --from-literal=api-token=${{ secrets.CLOUDFLARE_API_TOKEN }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
       # ---------------------------------------------------
