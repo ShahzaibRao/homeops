@@ -27,7 +27,6 @@ jobs:
         with:
           version: "3.15.0"
 
-
       - name: ⚙️ Configure kubeconfig
         run: |
           mkdir -p ~/.kube
@@ -89,7 +88,7 @@ jobs:
           kubectl create ns argocd --dry-run=client -o yaml | kubectl apply -f -
 
           kubectl create secret generic tunnel-credentials \
-            -n infra --from-file=tunnel.json=tunnel.json \
+            -n infra --from-file=credentials.json=tunnel.json \
             --dry-run=client -o yaml | kubectl apply -f -
 
           kubectl create secret generic cloudflare-api-token \
@@ -128,25 +127,28 @@ jobs:
           helm upgrade --install argocd argo/argo-cd -n argocd -f argocd-values.yaml --wait
 
       # ---------------------------------------------------
-      # STEP 5: Install Cloudflared
+      # STEP 5: Install Cloudflare Tunnel
       # ---------------------------------------------------
-      - name: ☁️ Install Cloudflared
+      - name: ☁️ Install Cloudflare Tunnel
         run: |
-          cat <<EOF > cloudflared-values.yaml
-          cloudflared:
-            tunnelName: "gitops-k3s-tunnel"
-            tunnelId: "$TUNNEL_ID"
-            secretName: "tunnel-credentials"
-            config:
-              ingress:
-                - hostname: "*.raoshahzaib.site"
-                  service: https://traefik.kube-system.svc.cluster.local:443
-                  originRequest:
-                    noTLSVerify: true
-                - service: http_status:404
+          cat <<EOF > tunnel-values.yaml
+          credentials:
+            existingSecret: tunnel-credentials
+          tunnel:
+            name: "gitops-k3s-tunnel"
+            id: "$TUNNEL_ID"
+          ingress:
+            - hostname: "*.raoshahzaib.site"
+              service: https://traefik.kube-system.svc.cluster.local:443
+              originRequest:
+                noTLSVerify: true
+            - service: http_status:404
           EOF
 
-          helm upgrade --install cloudflare cloudflare/cloudflare-tunnel -n infra -f cloudflared-values.yaml --wait
+          helm upgrade --install cloudflare cloudflare/cloudflare-tunnel \
+            --namespace infra \
+            --values tunnel-values.yaml \
+            --wait
 
       # ---------------------------------------------------
       # STEP 6: Install ExternalDNS
@@ -169,7 +171,10 @@ jobs:
             - raoshahzaib.site
           EOF
 
-          helm upgrade --install external-dns kubernetes-sigs/external-dns -n external-dns -f externaldns-values.yaml --wait
+          helm upgrade --install external-dns kubernetes-sigs/external-dns \
+            -n external-dns \
+            -f externaldns-values.yaml \
+            --wait
 
       # ---------------------------------------------------
       # STEP 7: Verify Everything
