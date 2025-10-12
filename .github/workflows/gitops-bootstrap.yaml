@@ -134,7 +134,7 @@ jobs:
           cat <<EOF > tunnel-values.yaml
           tunnel:
             name: "gitops-k3s-tunnel"
-            id: "$TUNNEL_ID"
+            id: "${TUNNEL_ID}"
           ingress:
             - hostname: "*.raoshahzaib.site"
               service: https://traefik.kube-system.svc.cluster.local:443
