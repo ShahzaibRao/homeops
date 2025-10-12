@@ -7,16 +7,26 @@ on:
 
 jobs:
   bootstrap:
-    # 👇 Use your self-hosted runner instead of GitHub-hosted one
-    runs-on: self-hosted
+    runs-on: self-hosted  # use your self-hosted runner
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: 🧩 Install prerequisites (gh, jq)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq curl
+          type gh >/dev/null 2>&1 || (
+            curl -fsSL https://github.com/cli/cli/releases/latest/download/gh_$(curl -s https://api.github.com/repos/cli/cli/releases/latest | jq -r '.tag_name' | sed 's/v//')_linux_amd64.tar.gz -o gh.tar.gz
+            tar xzf gh.tar.gz
+            sudo cp gh_*/bin/gh /usr/local/bin/
+          )
 
       - name: 🧰 Setup kubectl & Helm
         uses: azure/setup-helm@v4
         with:
           version: "3.15.0"
+
 
       - name: ⚙️ Configure kubeconfig
         run: |
