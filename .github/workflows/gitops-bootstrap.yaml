@@ -7,43 +7,35 @@ on:
 
 jobs:
   bootstrap:
-    runs-on: self-hosted
-
-    env:
-      # Optional: set a default tunnel name if you want
-      TUNNEL_NAME: gitops-k3s-tunnel
+    runs-on: self-hosted  # use your self-hosted runner
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🧩 Install prerequisites (gh, jq, curl)
+      - name: 🧩 Install prerequisites (gh, jq)
         run: |
           sudo apt-get update -y
           sudo apt-get install -y jq curl
-          if ! command -v gh >/dev/null 2>&1; then
-            GH_VER=$(curl -s https://api.github.com/repos/cli/cli/releases/latest | jq -r '.tag_name' | sed 's/v//')
-            curl -fsSL "https://github.com/cli/cli/releases/latest/download/gh_${GH_VER}_linux_amd64.tar.gz" -o gh.tar.gz
+          type gh >/dev/null 2>&1 || (
+            curl -fsSL https://github.com/cli/cli/releases/latest/download/gh_$(curl -s https://api.github.com/repos/cli/cli/releases/latest | jq -r '.tag_name' | sed 's/v//')_linux_amd64.tar.gz -o gh.tar.gz
             tar xzf gh.tar.gz
             sudo cp gh_*/bin/gh /usr/local/bin/
-          fi
-          gh --version
-          jq --version
+          )
 
-      - name: 🧰 Setup Helm
+      - name: 🧰 Setup kubectl & Helm
         uses: azure/setup-helm@v4
         with:
           version: "3.15.0"
+
 
       - name: ⚙️ Configure kubeconfig
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.K3S_KUBECONFIG }}" > ~/.kube/config
           chmod 600 ~/.kube/config
-          kubectl version --client
 
       # ---------------------------------------------------
-      # STEP 1: Ensure Cloudflare Tunnel exists and store credentials
+      # STEP 1: Check or Create Cloudflare Tunnel
       # ---------------------------------------------------
       - name: 🌐 Ensure Cloudflare Tunnel exists
         id: ensure_tunnel
@@ -52,78 +44,61 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          set -euo pipefail
-          export GH_TOKEN="${GH_TOKEN}"
-          echo "🔎 Checking for existing tunnel ID GitHub secret..."
-          # list secrets and check presence
-          if gh secret list --visibility all | grep -q '^CLOUDFLARE_TUNNEL_ID$'; then
-            echo "✅ Found existing GitHub secret CLOUDFLARE_TUNNEL_ID"
-            # write env var for pipeline
-            echo "TUNNEL_ID=${{ secrets.CLOUDFLARE_TUNNEL_ID }}" >> $GITHUB_ENV
-            # write the stored JSON secret safely into tunnel.json
-            echo "${{ secrets.CLOUDFLARE_TUNNEL_CRED_JSON }}" | jq '.' > tunnel.json
-            echo "Wrote tunnel.json from GitHub secret"
-          else
-            echo "🆕 No existing GitHub secret found. Creating new tunnel via Cloudflare API..."
+          set -e
+          echo "🔎 Checking for existing tunnel credentials secret..."
+          
+          # Try to read existing tunnel ID secret
+          EXISTING_TUNNEL_ID=$(gh secret list | grep CLOUDFLARE_TUNNEL_ID || true)
+          
+          if [ -z "$EXISTING_TUNNEL_ID" ]; then
+            echo "🆕 No tunnel found, creating new one..."
+            
             RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel" \
               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               -H "Content-Type: application/json" \
-              --data "{\"name\":\"${TUNNEL_NAME}\"}")
-            echo "Cloudflare create response:"
-            echo "$RESPONSE" | jq '.'
-            TUNNEL_ID=$(echo "$RESPONSE" | jq -r '.result.id')
-            if [ -z "$TUNNEL_ID" ] || [ "$TUNNEL_ID" = "null" ]; then
-              echo "ERROR: failed to create tunnel; response:"
-              echo "$RESPONSE"
-              exit 1
-            fi
-            echo "TUNNEL_ID=$TUNNEL_ID" >> $GITHUB_ENV
-            echo "Created tunnel: $TUNNEL_ID"
+              --data '{"name": "gitops-k3s-tunnel"}')
 
-            # fetch the credentials JSON for the tunnel
+            echo "$RESPONSE" | jq .
+            TUNNEL_ID=$(echo "$RESPONSE" | jq -r '.result.id')
+
+            echo "TUNNEL_ID=$TUNNEL_ID" >> $GITHUB_ENV
+            echo "Tunnel created: $TUNNEL_ID"
+
+            # Download credentials JSON
             curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${TUNNEL_ID}/credentials" \
               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               -o tunnel.json
 
-            # validate JSON
-            jq '.' tunnel.json >/dev/null
-
-            # save secrets in GitHub for future runs (requires GH auth)
-            echo "Saving CLOUDFLARE_TUNNEL_ID and CLOUDFLARE_TUNNEL_CRED_JSON as GitHub secrets"
-            gh secret set CLOUDFLARE_TUNNEL_ID --body "${TUNNEL_ID}"
+            # Save both ID and JSON as GitHub Secrets for future runs
+            echo "📦 Saving tunnel ID and credentials JSON as GitHub Secrets..."
+            gh secret set CLOUDFLARE_TUNNEL_ID --body "$TUNNEL_ID"
             gh secret set CLOUDFLARE_TUNNEL_CRED_JSON --body "$(cat tunnel.json)"
-            echo "Saved GitHub secrets"
+          else
+            echo "✅ Existing tunnel found. Using stored GitHub secrets."
+            echo "TUNNEL_ID=${{ secrets.CLOUDFLARE_TUNNEL_ID }}" >> $GITHUB_ENV
+            echo "${{ secrets.CLOUDFLARE_TUNNEL_CRED_JSON }}" > tunnel.json
           fi
 
       # ---------------------------------------------------
-      # STEP 2: Create Namespaces & Kubernetes Secrets
+      # STEP 2: Create Kubernetes Namespaces & Secrets
       # ---------------------------------------------------
       - name: 🔐 Create Namespaces and Secrets
         run: |
-          set -euo pipefail
           kubectl create ns infra --dry-run=client -o yaml | kubectl apply -f -
           kubectl create ns external-dns --dry-run=client -o yaml | kubectl apply -f -
           kubectl create ns argocd --dry-run=client -o yaml | kubectl apply -f -
 
-          # Ensure tunnel.json exists
-          if [ ! -f tunnel.json ]; then
-            echo "ERROR: tunnel.json not found"
-            exit 1
-          fi
+          kubectl create secret generic tunnel-credentials \
+            -n infra --from-file=tunnel.json=tunnel.json \
+            --dry-run=client -o yaml | kubectl apply -f -
 
-          # Create the secret with the exact name the Helm chart expects
-          kubectl delete secret cloudflare-cloudflare-tunnel -n infra --ignore-not-found
-          kubectl create secret generic cloudflare-cloudflare-tunnel \
-            -n infra --from-file=credentials.json=tunnel.json
-
-          # ExternalDNS Cloudflare token secret
           kubectl create secret generic cloudflare-api-token \
             -n external-dns \
             --from-literal=api-token=${{ secrets.CLOUDFLARE_API_TOKEN }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
       # ---------------------------------------------------
-      # STEP 3: Add Helm Repos
+      # STEP 3: Add Helm Repositories
       # ---------------------------------------------------
       - name: 🪣 Add Helm Repositories
         run: |
@@ -137,8 +112,7 @@ jobs:
       # ---------------------------------------------------
       - name: 🚀 Install ArgoCD
         run: |
-          set -euo pipefail
-          cat > argocd-values.yaml <<EOF
+          cat <<EOF > argocd-values.yaml
           server:
             ingress:
               enabled: true
@@ -148,48 +122,38 @@ jobs:
               annotations:
                 external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
                 external-dns.alpha.kubernetes.io/hostname: argocd.raoshahzaib.site
-                external-dns.alpha.kubernetes.io/target: ${TUNNEL_ID}.cfargotunnel.com
+                external-dns.alpha.kubernetes.io/target: $TUNNEL_ID.cfargotunnel.com
           EOF
 
           helm upgrade --install argocd argo/argo-cd -n argocd -f argocd-values.yaml --wait
 
       # ---------------------------------------------------
-      # STEP 5: Install Cloudflare Tunnel (fixed: variable expansion + secret key)
+      # STEP 5: Install Cloudflared
       # ---------------------------------------------------
-      - name: ☁️ Install Cloudflare Tunnel
+      - name: ☁️ Install Cloudflared
         run: |
-          set -euo pipefail
-          echo "Generating tunnel-values.yaml with expanded TUNNEL_ID..."
-          cat > tunnel-values.yaml <<EOF
-          tunnel:
-            name: "${TUNNEL_NAME}"
-            id: "${TUNNEL_ID}"
-          credentials:
-            existingSecret: "cloudflare-cloudflare-tunnel"
-            secretKey: "credentials.json"
-          ingress:
-            - hostname: "*.raoshahzaib.site"
-              service: https://traefik.kube-system.svc.cluster.local:443
-              originRequest:
-                noTLSVerify: true
-            - service: http_status:404
+          cat <<EOF > cloudflared-values.yaml
+          cloudflared:
+            tunnelName: "gitops-k3s-tunnel"
+            tunnelId: "$TUNNEL_ID"
+            secretName: "tunnel-credentials"
+            config:
+              ingress:
+                - hostname: "*.raoshahzaib.site"
+                  service: https://traefik.kube-system.svc.cluster.local:443
+                  originRequest:
+                    noTLSVerify: true
+                - service: http_status:404
           EOF
 
-          helm upgrade --install cloudflare cloudflare/cloudflare-tunnel \
-            --namespace infra \
-            --values tunnel-values.yaml \
-            --wait
-
-          # Ensure the deployment picks up config; rollout restart to be safe
-          kubectl rollout restart deploy/cloudflare-cloudflare-tunnel -n infra || true
+          helm upgrade --install cloudflare cloudflare/cloudflare-tunnel -n infra -f cloudflared-values.yaml --wait
 
       # ---------------------------------------------------
       # STEP 6: Install ExternalDNS
       # ---------------------------------------------------
       - name: 🌍 Install ExternalDNS
         run: |
-          set -euo pipefail
-          cat > externaldns-values.yaml <<EOF
+          cat <<EOF > externaldns-values.yaml
           provider:
             name: cloudflare
           cloudflare:
@@ -205,25 +169,10 @@ jobs:
             - raoshahzaib.site
           EOF
 
-          helm upgrade --install external-dns kubernetes-sigs/external-dns \
-            -n external-dns \
-            -f externaldns-values.yaml \
-            --wait
+          helm upgrade --install external-dns kubernetes-sigs/external-dns -n external-dns -f externaldns-values.yaml --wait
 
       # ---------------------------------------------------
       # STEP 7: Verify Everything
       # ---------------------------------------------------
-      - name: ✅ Show Running Pods & Tunnel Logs
-        run: |
-          kubectl get pods -A -o wide
-          echo "Cloudflare tunnel pod logs (last 200 lines):"
-          kubectl logs -n infra deploy/cloudflare-cloudflare-tunnel --tail=200 || true
-
-      # Optional: expose ArgoCD admin initial password into GitHub secret (comment/uncomment as you wish)
-      - name: 🔐 (Optional) Save ArgoCD admin password to GitHub secret
-        if: false
-        run: |
-          # Example only: enable with `if: true` and ensure GH_PAT has permissions to set repo secrets
-          ADMIN_PASS=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode)
-          echo "Saving ARGOCD_ADMIN_PASSWORD to GitHub secrets"
-          gh secret set ARGOCD_ADMIN_PASSWORD --body "${ADMIN_PASS}"
+      - name: ✅ Show Running Pods
+        run: kubectl get pods -A
