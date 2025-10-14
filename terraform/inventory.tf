@@ -1,5 +1,5 @@
 resource "local_file" "ansible_inventory" {
-  filename = "${path.module}/inventory.ini"
+  filename = "${path.module}/ansible/k3s/inventory.ini"
   content  = local.ansible_inventory_content
 }
 

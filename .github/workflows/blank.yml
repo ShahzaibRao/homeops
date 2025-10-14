@@ -84,16 +84,4 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve tfplan
 
-      - name: Copy Inventory File
-        if: success()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cp inventory.ini ../ansible/
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          git stash -u
-          git pull origin main --rebase
-          git stash pop
-          git add ../ansible/inventory.ini inventory.ini
-          git diff-index --quiet HEAD || (git commit -m "Update Ansible inventory after Terraform apply" && git push origin HEAD:main)
+      
