@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'ansible/**'        # Trigger only when ansible code changes
+      - 'ansible/argocd/**'        # Trigger only when ansible code changes
   workflow_dispatch:         # Allow manual trigger from Actions tab
 
 jobs:
