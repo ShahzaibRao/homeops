@@ -45,10 +45,7 @@
 
 - name: Deploy Root ArgoCD Application (GitOps Configuration)
   become: yes
-  shell: |
-    kubectl apply -f argocd-app.yml
-  args:
-    chdir: "{{ role_path }}/files"
-  register: argo_app
-  changed_when: "'created' in argo_app.stdout or 'configured' in argo_app.stdout"
-  ignore_errors: false
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ role_path }}/files/argocd-app.yml"
+
