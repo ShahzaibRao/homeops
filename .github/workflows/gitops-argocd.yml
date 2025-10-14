@@ -4,13 +4,13 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'ansible/argocd/**'        # Trigger only when ansible code changes
-  workflow_dispatch:         # Allow manual trigger from Actions tab
+      - 'ansible/argocd/**'        # Trigger only when ansible/argocd changes
+  workflow_dispatch:               # Allow manual trigger
 
 jobs:
   deploy:
     name: Configure ArgoCD via Ansible
-    runs-on: self-hosted     # Your self-hosted runner (with local network access)
+    runs-on: self-hosted           # Your self-hosted runner
 
     steps:
       - name: Checkout repository
@@ -37,7 +37,7 @@ jobs:
         run: ansible --version
 
       - name: Run ArgoCD Installation Playbook
-        working-directory: ansible
+        working-directory: ansible/argocd
         run: |
           ansible-playbook \
             -i inventory/hosts.ini \
