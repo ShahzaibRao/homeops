@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'ansible/**'        # Trigger only on changes in ansible/ dir
+      - 'ansible/k3s/**'        # Trigger only on changes in ansible/ dir
   workflow_dispatch:         # Allow manual trigger
 
 jobs:
