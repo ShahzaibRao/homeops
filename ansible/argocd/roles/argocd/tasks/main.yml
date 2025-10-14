@@ -1,22 +1,27 @@
 ---
+- name: Ensure kubectl is available
+  become: yes
+  shell: which kubectl
+  register: kubectl_check
+  changed_when: false
+  failed_when: kubectl_check.rc != 0
+
 - name: Create namespace for ArgoCD
   become: yes
-  kubernetes.core.k8s:
-    state: present
-    definition:
-      apiVersion: v1
-      kind: Namespace
-      metadata:
-        name: argocd
+  shell: |
+    kubectl get ns argocd || kubectl create ns argocd
+  register: ns_create
+  changed_when: "'created' in ns_create.stdout"
+  ignore_errors: false
 
 - name: Install ArgoCD components
   become: yes
-  kubernetes.core.k8s:
-    state: present
-    src: https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-    namespace: argocd
+  shell: |
+    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  args:
+    warn: false
 
-- name: Wait for ArgoCD pods to be ready
+- name: Wait for ArgoCD server deployment to be available
   become: yes
   shell: |
     kubectl wait --for=condition=available --timeout=600s deployment/argocd-server -n argocd
@@ -34,12 +39,15 @@
   shell: |
     kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
   register: argocd_password
+  changed_when: false
 
-- debug:
-    msg: "ArgoCD Admin Password: {{ argocd_password.stdout }}"
+- name: Display ArgoCD Admin Password
+  debug:
+    msg: "🔑 ArgoCD Admin Password: {{ argocd_password.stdout }}"
 
 - name: Deploy initial GitOps Application (optional)
   become: yes
   kubernetes.core.k8s:
     state: present
     definition: "{{ lookup('template', 'app.yaml.j2') }}"
+  ignore_errors: true
