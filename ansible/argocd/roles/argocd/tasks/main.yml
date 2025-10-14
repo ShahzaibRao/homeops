@@ -43,9 +43,18 @@
   debug:
     msg: "🔑 ArgoCD Admin Password: {{ argocd_password.stdout }}"
 
+- name: Copy ArgoCD application file to remote node
+  become: yes
+  copy:
+    src: "{{ role_path }}/files/argocd-app.yml"
+    dest: /tmp/argocd-app.yml
+    mode: '0644'
+
 - name: Deploy Root ArgoCD Application (GitOps Configuration)
   become: yes
-  kubernetes.core.k8s:
-    state: present
-    src: "{{ role_path }}/files/argocd-app.yml"
+  shell: |
+    kubectl apply -f /tmp/argocd-app.yml
+  register: argo_app
+  changed_when: "'created' in argo_app.stdout or 'configured' in argo_app.stdout"
+  ignore_errors: false
 
