@@ -8,6 +8,8 @@ spec:
   selector:
     app: nginx
   ports:
-    - port: 80
-      targetPort: 80
-  type: ClusterIP
+    - name: http
+      port: 80          # Service port
+      targetPort: 80    # Container port
+      nodePort: 30080   # Fixed external NodePort (optional, can remove for auto-assignment)
+  type: NodePort
