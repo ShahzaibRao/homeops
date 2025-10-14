@@ -1,0 +1,6 @@
+---
+- name: Setup ArgoCD on K3s Cluster
+  hosts: k3s_master
+  become: yes
+  roles:
+    - argocd

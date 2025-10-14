@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: k3s-gitops-apps
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/rao-shahzaib/k3s-gitops.git
+    targetRevision: main
+    path: apps        # 👈 path updated to your 'apps/' folder
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+
+  syncPolicy:
+    automated:
+      prune: true        # automatically remove deleted resources
+      selfHeal: true     # automatically correct drift
+    syncOptions:
+      - CreateNamespace=true
