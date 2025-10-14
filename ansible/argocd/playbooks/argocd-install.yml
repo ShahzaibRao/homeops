@@ -1,6 +1,9 @@
 ---
-- name: Setup ArgoCD on K3s Cluster
-  hosts: k3s_master
+- name: Install and configure ArgoCD on K3s
+  hosts: master
   become: yes
+  vars:
+    argocd_namespace: argocd
+
   roles:
     - argocd
