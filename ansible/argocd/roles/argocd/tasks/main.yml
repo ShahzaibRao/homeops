@@ -43,9 +43,12 @@
   debug:
     msg: "🔑 ArgoCD Admin Password: {{ argocd_password.stdout }}"
 
-- name: Deploy initial GitOps Application (optional)
+- name: Deploy Root ArgoCD Application (GitOps Configuration)
   become: yes
-  kubernetes.core.k8s:
-    state: present
-    definition: "{{ lookup('template', 'app.yaml.j2') }}"
-  ignore_errors: true
+  shell: |
+    kubectl apply -f argocd-app.yml
+  args:
+    chdir: "{{ role_path }}/files"
+  register: argo_app
+  changed_when: "'created' in argo_app.stdout or 'configured' in argo_app.stdout"
+  ignore_errors: false
