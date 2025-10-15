@@ -1,0 +1,100 @@
+name: Terraform Deployment
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+
+# Limit permissions of GITHUB_TOKEN
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  terraform:
+    name: Terraform
+    runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: ./terraform
+
+    env:
+      # Cloudflare R2 (S3-compatible) credentials - set these as GitHub Secrets (see instructions below)
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_KEY }}
+
+      # Terraform variables for Proxmox / SSH - keep these as TF_VAR_* (your code already expects them)
+      TF_VAR_proxmox_user: ${{ secrets.PROXMOX_USER }}
+      TF_VAR_proxmox_password: ${{ secrets.PROXMOX_PASSWORD }}
+      TF_VAR_ssh_user: ${{ secrets.SSH_USER }}
+      TF_VAR_ssh_password: ${{ secrets.SSH_PASSWORD }}
+      TF_VAR_ssh_keys: ${{ secrets.SSH_KEYS }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Cache Terraform plugins
+        uses: actions/cache@v3
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Terraform Init
+        id: init
+        run: terraform init -reconfigure
+
+      - name: Terraform Format
+        id: fmt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          terraform fmt -recursive
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git stash -u
+          git pull origin main --rebase
+          git stash pop
+          git add .
+          git diff-index --quiet HEAD || (git commit -m "Automated: Fix terraform formatting" && git push origin HEAD:main)
+        continue-on-error: true
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -out=tfplan
+        continue-on-error: true
+
+      - name: Terraform Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve tfplan
+
+      
+      - name: Copy Inventory File
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp inventory.ini ../ansible/k3s/inventory.ini
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git stash -u
+          git pull origin main --rebase
+          git stash pop
+          git add ../ansible/k3s/inventory.ini 
+          git diff-index --quiet HEAD || (git commit -m "Update Ansible inventory after Terraform apply" && git push origin HEAD:main)
