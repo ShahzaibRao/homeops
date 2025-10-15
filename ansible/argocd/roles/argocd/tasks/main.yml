@@ -43,41 +43,4 @@
   debug:
     msg: "🔑 ArgoCD Admin Password: {{ argocd_password.stdout }}"
 
-# ----------------------------------------------------------------
-# 🧭 Configure the Truth Point (App of Apps)
-# ----------------------------------------------------------------
-- name: Create ArgoCD root-app manifest file
-  become: yes
-  copy:
-    dest: /tmp/root-app.yaml
-    content: |
-      apiVersion: argoproj.io/v1alpha1
-      kind: Application
-      metadata:
-        name: root-app
-        namespace: argocd
-      spec:
-        project: default
-        source:
-          repoURL: https://github.com/ShahzaibRao/homeops.git
-          targetRevision: main
-          path: apps
-          directory:
-            recurse: true
-        destination:
-          server: https://kubernetes.default.svc
-          namespace: argocd
-        syncPolicy:
-          automated:
-            prune: true
-            selfHeal: true
-          syncOptions:
-            - CreateNamespace=true
-            - ApplyOutOfSyncOnly=true
 
-- name: Apply ArgoCD root-app to cluster
-  become: yes
-  shell: |
-    kubectl apply -f /tmp/root-app.yaml
-  register: argocd_root_app
-  changed_when: "'created' in argocd_root_app.stdout or 'configured' in argocd_root_app.stdout"
