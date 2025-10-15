@@ -6,7 +6,7 @@ vms = {
     disk_size  = "40G"
     ip_address = "192.168.2.194"
   }
-  
+
 }
 
 
