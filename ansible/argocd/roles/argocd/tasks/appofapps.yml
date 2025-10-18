@@ -1,0 +1,59 @@
+---
+- name: Create ArgoCD App-of-Apps manifest
+  become: yes
+  copy:
+    dest: /tmp/app-of-apps.yaml
+    content: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Application
+      metadata:
+        name: app-of-apps
+        namespace: argocd
+        finalizers:
+          - resources-finalizer.argocd.argoproj.io
+      spec:
+        project: default
+        source:
+          repoURL: git@github.com:cterence/homelab-gitops.git
+          path: argocd-apps/
+          targetRevision: HEAD
+        destination:
+          name: in-cluster
+          namespace: argocd
+        syncPolicy:
+          syncOptions:
+            - CreateNamespace=true
+          automated:
+            prune: true
+            selfHeal: true
+
+- name: Apply App-of-Apps manifest
+  become: yes
+  shell: |
+    kubectl apply -f /tmp/app-of-apps.yaml
+  register: app_apply
+  changed_when: "'configured' in app_apply.stdout or 'created' in app_apply.stdout"
+
+- name: Wait for App-of-Apps Application to appear
+  become: yes
+  shell: |
+    echo "⏳ Waiting for ArgoCD to register the app-of-apps..."
+    for i in {1..30}; do
+      if kubectl -n argocd get app app-of-apps >/dev/null 2>&1; then
+        echo "App-of-Apps registered!"
+        exit 0
+      fi
+      sleep 10
+    done
+    echo "Timed out waiting for app-of-apps."
+    exit 1
+  register: appofapps_status
+  changed_when: false
+
+- name: Display confirmation message
+  debug:
+    msg:
+      - "🚀 App-of-Apps successfully applied!"
+      - "📦 ArgoCD is now managing all apps from your Git repo:"
+      - "    Repo: git@github.com:cterence/homelab-gitops.git"
+      - "    Folder: argocd-apps/"

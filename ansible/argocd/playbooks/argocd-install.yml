@@ -6,4 +6,4 @@
     argocd_namespace: argocd
 
   roles:
-    - argocd
+    - role: argocd

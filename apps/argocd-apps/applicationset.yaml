@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: homelab-apps
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        repoURL: git@github.com:cterence/homelab-gitops.git
+        revision: HEAD
+        directories:
+          - path: apps/k8s-apps/*
+  template:
+    metadata:
+      name: '{{path.basename}}'
+    spec:
+      project: default
+      source:
+        repoURL: git@github.com:cterence/homelab-gitops.git
+        targetRevision: HEAD
+        path: '{{path}}'
+      destination:
+        name: in-cluster
+        namespace: '{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
