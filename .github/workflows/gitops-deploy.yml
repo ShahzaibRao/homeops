@@ -1,0 +1,82 @@
+name: Homelab GitOps Deployment
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'apps/argocd-apps/**'
+      - 'apps/k8s-apps/**'
+      - '.github/workflows/gitops-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  gitops:
+    name: Deploy ArgoCD + Sync All Apps
+    runs-on: self-hosted
+
+    env:
+      KUBECONFIG: /etc/rancher/k3s/k3s.yaml  # Adjust if stored elsewhere
+      ARGOCD_NAMESPACE: argocd
+      ARGOCD_CHART_VERSION: 7.7.10
+      GIT_REPO_URL: git@github.com:cterence/homelab-gitops.git
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Optional: if using a private repo and SSH auth
+      - name: Configure SSH key for repo access
+        if: ${{ secrets.SSH_PRIVATE_KEY != '' }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Verify K3S cluster connectivity
+        run: |
+          echo "🔍 Checking Kubernetes connectivity..."
+          kubectl cluster-info
+          kubectl get nodes -o wide
+
+      - name: Create ArgoCD namespace if missing
+        run: |
+          kubectl get ns $ARGOCD_NAMESPACE || kubectl create ns $ARGOCD_NAMESPACE
+
+      - name: Install or upgrade ArgoCD
+        run: |
+          helm repo add argo https://argoproj.github.io/argo-helm || true
+          helm repo update
+          helm upgrade --install argocd argo/argo-cd \
+            --namespace $ARGOCD_NAMESPACE \
+            --version $ARGOCD_CHART_VERSION \
+            --set server.service.type=LoadBalancer \
+            --set configs.params."server.insecure"=true
+
+      - name: Wait for ArgoCD server to be ready
+        run: |
+          echo "⏳ Waiting for ArgoCD server..."
+          kubectl -n $ARGOCD_NAMESPACE wait \
+            --for=condition=available deployment/argocd-server --timeout=600s
+
+      - name: Apply App-of-Apps manifest
+        run: |
+          echo "🚀 Bootstrapping App-of-Apps..."
+          kubectl apply -f apps/argocd-apps/app-of-apps.yaml
+
+      - name: Verify App-of-Apps registration
+        run: |
+          echo "🔍 Checking for app-of-apps Application..."
+          kubectl -n $ARGOCD_NAMESPACE get app app-of-apps || echo "App-of-Apps not yet created."
+
+      - name: Force sync all ArgoCD Applications
+        run: |
+          echo "🔄 Syncing all ArgoCD applications..."
+          kubectl -n $ARGOCD_NAMESPACE get applications.argoproj.io -o name | \
+          xargs -I{} kubectl -n $ARGOCD_NAMESPACE patch {} --type merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
+          echo "✅ All apps refreshed and syncing with latest Git state."
+
+      - name: Show ArgoCD initial admin password
+        run: |
+          echo "🔑 ArgoCD Admin Password:"
+          kubectl -n $ARGOCD_NAMESPACE get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
