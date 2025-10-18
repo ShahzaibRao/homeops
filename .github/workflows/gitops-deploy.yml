@@ -11,8 +11,8 @@ on:
 
 jobs:
   gitops:
-    name: Deploy ArgoCD + Sync All Apps
-    runs-on: self-hosted   # your self-hosted runner inside homelab
+    name: Deploy ArgoCD + App-of-Apps + ApplicationSet
+    runs-on: self-hosted
 
     env:
       ARGOCD_NAMESPACE: argocd
@@ -21,17 +21,17 @@ jobs:
       KUBECONFIG: ${{ github.workspace }}/kubeconfig
 
     steps:
-      # 1️⃣ Checkout your repository
+      # 1️⃣ Checkout the repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Load SSH Private Key (for private repo access)
+      # 2️⃣ Load SSH Private Key (for repo access)
       - name: Load SSH Private Key
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      # 3️⃣ Configure SSH Known Hosts (trust GitHub)
+      # 3️⃣ Configure SSH Known Hosts (to trust GitHub)
       - name: Configure SSH Known Hosts
         run: |
           mkdir -p ~/.ssh
@@ -39,16 +39,16 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       # 4️⃣ Write kubeconfig from GitHub secret
-      - name: Write kubeconfig from secret
+      - name: Configure kubeconfig
         run: |
           echo "${{ secrets.K3S_KUBECONFIG }}" > $KUBECONFIG
           chmod 600 $KUBECONFIG
           echo "✅ Wrote kubeconfig to $KUBECONFIG"
 
-      # 5️⃣ Verify connection to K3S cluster
+      # 5️⃣ Verify cluster access
       - name: Verify Kubernetes connection
         run: |
-          echo "🔍 Checking K3S cluster connection..."
+          echo "🔍 Checking K3S cluster connectivity..."
           kubectl cluster-info
           kubectl get nodes -o wide
 
@@ -57,19 +57,19 @@ jobs:
         run: |
           kubectl get ns $ARGOCD_NAMESPACE || kubectl create ns $ARGOCD_NAMESPACE
 
-      # 🧹 7️⃣ Cleanup any previous ArgoCD installation (fixes Helm ownership issues)
-      - name: Cleanup old ArgoCD resources (first-time setup fix)
+      # 🧹 7️⃣ Cleanup old ArgoCD resources (prevents Helm ownership errors)
+      - name: Cleanup previous ArgoCD installation
         run: |
-          echo "🧹 Cleaning up any old ArgoCD installation..."
+          echo "🧹 Cleaning up any old ArgoCD resources..."
           kubectl delete namespace argocd --ignore-not-found=true
           kubectl delete crd applications.argoproj.io appprojects.argoproj.io \
             applicationsets.argoproj.io argocdexports.argoproj.io --ignore-not-found=true
           kubectl delete clusterrole argocd-application-controller argocd-server argocd-dex-server --ignore-not-found=true
           kubectl delete clusterrolebinding argocd-application-controller argocd-server argocd-dex-server --ignore-not-found=true
-          echo "✅ Cleanup completed. Proceeding with Helm installation..."
+          echo "✅ Cleanup completed."
           kubectl create ns $ARGOCD_NAMESPACE || true
 
-      # 8️⃣ Install or upgrade ArgoCD using Helm
+      # 8️⃣ Install or upgrade ArgoCD via Helm
       - name: Install or upgrade ArgoCD
         run: |
           helm repo add argo https://argoproj.github.io/argo-helm || true
@@ -81,35 +81,37 @@ jobs:
             --set server.service.type=LoadBalancer \
             --set configs.params."server.insecure"=true
 
-      # 9️⃣ Wait until ArgoCD server is available
-      - name: Wait for ArgoCD server
+      # 9️⃣ Wait for ArgoCD server
+      - name: Wait for ArgoCD server to be ready
         run: |
-          echo "⏳ Waiting for ArgoCD server deployment to be ready..."
+          echo "⏳ Waiting for ArgoCD server..."
           kubectl -n $ARGOCD_NAMESPACE wait \
             --for=condition=available deployment/argocd-server --timeout=600s
 
-      # 🔟 Apply App-of-Apps manifest
-      - name: Apply App-of-Apps manifest
+      # 🔟 Apply both ArgoCD app manifests (App-of-Apps + ApplicationSet)
+      - name: Apply App-of-Apps and ApplicationSet
         run: |
-          echo "🚀 Applying App-of-Apps configuration..."
+          echo "🚀 Applying ArgoCD bootstrap manifests..."
           kubectl apply -f apps/argocd-apps/app-of-apps.yaml
+          kubectl apply -f apps/argocd-apps/applicationset.yaml
+          echo "✅ Both app-of-apps.yaml and applicationset.yaml applied."
 
-      # 11️⃣ Verify App-of-Apps registration
+      # 11️⃣ Verify that ArgoCD registered the Application
       - name: Verify App-of-Apps registration
         run: |
           echo "🔍 Checking ArgoCD Application..."
           kubectl -n $ARGOCD_NAMESPACE get app app-of-apps || echo "App-of-Apps not yet created."
 
-      # 12️⃣ Force refresh and sync for all ArgoCD applications
-      - name: Force ArgoCD sync
+      # 12️⃣ Force ArgoCD to refresh/sync
+      - name: Force sync all ArgoCD Applications
         run: |
-          echo "🔄 Forcing ArgoCD to refresh and sync all applications..."
+          echo "🔄 Forcing ArgoCD refresh..."
           kubectl -n $ARGOCD_NAMESPACE get applications.argoproj.io -o name | \
           xargs -I{} kubectl -n $ARGOCD_NAMESPACE patch {} --type merge \
             -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
-          echo "✅ All ArgoCD applications refreshed and syncing with latest Git state."
+          echo "✅ ArgoCD Applications refreshed and syncing."
 
-      # 13️⃣ Display ArgoCD Admin Password for login
+      # 13️⃣ Show ArgoCD admin password
       - name: Display ArgoCD Admin Password
         run: |
           echo "🔑 ArgoCD Admin Password:"
