@@ -12,37 +12,45 @@ on:
 jobs:
   gitops:
     name: Deploy ArgoCD + Sync All Apps
-    runs-on: self-hosted
+    runs-on: self-hosted           # Your self-hosted runner
 
     env:
-      KUBECONFIG: /etc/rancher/k3s/k3s.yaml  # Adjust if stored elsewhere
+      KUBECONFIG: /etc/rancher/k3s/k3s.yaml  # Adjust if your kubeconfig is elsewhere
       ARGOCD_NAMESPACE: argocd
       ARGOCD_CHART_VERSION: 7.7.10
       GIT_REPO_URL: git@github.com:cterence/homelab-gitops.git
 
     steps:
+      # 1️⃣ Checkout your repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Optional: if using a private repo and SSH auth
-      - name: Configure SSH key for repo access
-        if: ${{ secrets.SSH_PRIVATE_KEY != '' }}
+      # 2️⃣ Load SSH key (for private Git repo access)
+      - name: Load SSH Private Key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      # 3️⃣ Configure known_hosts for GitHub (avoids host authenticity prompt)
+      - name: Configure SSH Known Hosts
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
-      - name: Verify K3S cluster connectivity
+      # 4️⃣ Verify K3S cluster connectivity
+      - name: Verify Kubernetes Connection
         run: |
-          echo "🔍 Checking Kubernetes connectivity..."
+          echo "🔍 Checking Kubernetes context..."
           kubectl cluster-info
           kubectl get nodes -o wide
 
+      # 5️⃣ Ensure ArgoCD namespace exists
       - name: Create ArgoCD namespace if missing
         run: |
           kubectl get ns $ARGOCD_NAMESPACE || kubectl create ns $ARGOCD_NAMESPACE
 
+      # 6️⃣ Install or upgrade ArgoCD using Helm
       - name: Install or upgrade ArgoCD
         run: |
           helm repo add argo https://argoproj.github.io/argo-helm || true
@@ -53,30 +61,35 @@ jobs:
             --set server.service.type=LoadBalancer \
             --set configs.params."server.insecure"=true
 
+      # 7️⃣ Wait for ArgoCD server deployment to become available
       - name: Wait for ArgoCD server to be ready
         run: |
           echo "⏳ Waiting for ArgoCD server..."
           kubectl -n $ARGOCD_NAMESPACE wait \
             --for=condition=available deployment/argocd-server --timeout=600s
 
+      # 8️⃣ Apply the App-of-Apps manifest
       - name: Apply App-of-Apps manifest
         run: |
-          echo "🚀 Bootstrapping App-of-Apps..."
+          echo "🚀 Bootstrapping ArgoCD from Git..."
           kubectl apply -f apps/argocd-apps/app-of-apps.yaml
 
+      # 9️⃣ Verify that ArgoCD registered the App-of-Apps
       - name: Verify App-of-Apps registration
         run: |
-          echo "🔍 Checking for app-of-apps Application..."
+          echo "🔍 Checking for ArgoCD Application..."
           kubectl -n $ARGOCD_NAMESPACE get app app-of-apps || echo "App-of-Apps not yet created."
 
+      # 🔁 10️⃣ Force refresh and sync all ArgoCD Applications
       - name: Force sync all ArgoCD Applications
         run: |
-          echo "🔄 Syncing all ArgoCD applications..."
+          echo "🔄 Triggering ArgoCD refresh..."
           kubectl -n $ARGOCD_NAMESPACE get applications.argoproj.io -o name | \
           xargs -I{} kubectl -n $ARGOCD_NAMESPACE patch {} --type merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
-          echo "✅ All apps refreshed and syncing with latest Git state."
+          echo "✅ All ArgoCD apps refreshed and syncing with latest Git state."
 
-      - name: Show ArgoCD initial admin password
+      # 🔐 11️⃣ Display ArgoCD admin password
+      - name: Display ArgoCD Admin Password
         run: |
           echo "🔑 ArgoCD Admin Password:"
           kubectl -n $ARGOCD_NAMESPACE get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
