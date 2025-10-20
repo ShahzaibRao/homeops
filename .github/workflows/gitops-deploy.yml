@@ -46,7 +46,7 @@ jobs:
       - name: 🚀 Apply ArgoCD Root App (App-of-Apps)
         run: |
           echo "📦 Applying ArgoCD Root Application..."
-          kubectl apply -f argocd-apps/root-app.yaml
+          kubectl apply -f argocd-apps/app-of-apps.yaml
 
       - name: 🧩 Apply ArgoCD ApplicationSet
         run: |
