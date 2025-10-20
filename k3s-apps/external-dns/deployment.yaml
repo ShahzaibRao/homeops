@@ -4,8 +4,7 @@ metadata:
   name: external-dns
   namespace: kube-system
 spec:
-  strategy:
-    type: Recreate
+  replicas: 1
   selector:
     matchLabels:
       app: external-dns
@@ -17,18 +16,14 @@ spec:
       serviceAccountName: external-dns
       containers:
         - name: external-dns
-          image: k8s.gcr.io/external-dns/external-dns:v0.14.0
+          image: k8s.gcr.io/external-dns/external-dns:v0.14.1
           args:
             - --source=service
             - --source=ingress
             - --provider=cloudflare
+            - --cloudflare-proxied
+            - --cloudflare-api-token-secret=cloudflare-api-token-secret
             - --domain-filter=raoshahzaib.site
             - --policy=sync
             - --registry=txt
             - --txt-owner-id=k3s
-          env:
-            - name: CF_API_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: cloudflare-api-token-secret
-                  key: api-token

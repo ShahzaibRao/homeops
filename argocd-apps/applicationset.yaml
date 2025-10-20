@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: k3s-applications
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - list:
+        elements:
+          - name: external-secrets
+          - name: cloudflared
+          - name: external-dns
+          - name: nginx
+
+  template:
+    metadata:
+      name: "{{ .name }}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/ShahzaibRao/homeops.git
+        targetRevision: main
+        path: "k3s-apps/{{ .name }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ .name }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
