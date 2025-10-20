@@ -1,0 +1,51 @@
+name: 🚀 Bootstrap ArgoCD GitOps
+
+on:
+  # Manual trigger button in GitHub Actions UI
+  workflow_dispatch:
+
+  # Automatic trigger when ArgoCD configuration changes
+  push:
+    branches: [main]
+    paths:
+      - 'argocd-apps/**'
+      - '.github/workflows/bootstrap.yml'
+
+jobs:
+  bootstrap:
+    runs-on: self-hosted
+
+    steps:
+      - name: 🧩 Checkout
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Configure Kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.K3S_KUBECONFIG }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: 🧠 Install ArgoCD
+        run: |
+          helm repo add argo https://argoproj.github.io/argo-helm
+          helm repo update
+          helm upgrade --install argocd argo/argo-cd \
+            --namespace argocd --create-namespace \
+            --set server.service.type=LoadBalancer
+
+      - name: 🔐 Bootstrap GitHub Secret Store
+        env:
+          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
+        run: |
+          kubectl create ns external-secrets --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n external-secrets create secret generic github-secret-store \
+            --from-literal=token="$GITHUB_PAT" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: 🚀 Apply Root Application (Apps-of-Apps)
+        run: |
+          kubectl apply -f argocd-apps/root-app.yaml
+
+      - name: ✅ Verify ArgoCD Root App
+        run: |
+          kubectl get applications.argoproj.io -n argocd || true
