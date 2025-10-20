@@ -9,7 +9,7 @@ on:
     branches: [main]
     paths:
       - 'argocd-apps/**'
-      - '.github/workflows/bootstrap.yml'
+      - '.github/workflows/gitops-deploy.yml'
 
 jobs:
   bootstrap:
@@ -42,10 +42,17 @@ jobs:
             --from-literal=token="$GITHUB_PAT" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: 🚀 Apply Root Application (Apps-of-Apps)
+      # 👇 Add these two steps (App-of-Apps + ApplicationSet)
+      - name: 🚀 Apply ArgoCD Root App (App-of-Apps)
         run: |
+          echo "📦 Applying ArgoCD Root Application..."
           kubectl apply -f argocd-apps/root-app.yaml
 
-      - name: ✅ Verify ArgoCD Root App
+      - name: 🧩 Apply ArgoCD ApplicationSet
+        run: |
+          echo "📦 Applying ArgoCD ApplicationSet..."
+          kubectl apply -f argocd-apps/applicationset.yaml
+
+      - name: ✅ Verify ArgoCD Applications
         run: |
           kubectl get applications.argoproj.io -n argocd || true
