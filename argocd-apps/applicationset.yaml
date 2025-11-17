@@ -12,6 +12,7 @@ spec:
           - name: cloudflared
           - name: external-dns
           - name: nginx
+          - name: vault 
 
   template:
     metadata:
