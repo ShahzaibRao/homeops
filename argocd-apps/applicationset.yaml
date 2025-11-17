@@ -8,10 +8,10 @@ spec:
   generators:
     - list:
         elements:
-          - name: external-secrets
-          - name: cloudflared
-          - name: external-dns
-          - name: nginx
+         # - name: external-secrets
+         # - name: cloudflared
+         # - name: external-dns
+         # - name: nginx
           - name: vault 
 
   template:
