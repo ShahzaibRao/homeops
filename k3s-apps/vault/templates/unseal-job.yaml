@@ -1,0 +1,98 @@
+{{- if .Values.autoUnseal.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "vault.fullname" . }}-unseal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vault.labels" . | nindent 4 }}
+spec:
+  template:
+    spec:
+      serviceAccountName: {{ include "vault.serviceAccountName" . }}
+      containers:
+        - name: vault-unseal
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # Get unseal keys from secret
+              KEY1=$(kubectl get secret {{ include "vault.fullname" . }}-unseal-keys -n {{ .Release.Namespace }} -o jsonpath='{.data.key1}' | base64 -d)
+              KEY2=$(kubectl get secret {{ include "vault.fullname" . }}-unseal-keys -n {{ .Release.Namespace }} -o jsonpath='{.data.key2}' | base64 -d)
+              KEY3=$(kubectl get secret {{ include "vault.fullname" . }}-unseal-keys -n {{ .Release.Namespace }} -o jsonpath='{.data.key3}' | base64 -d)
+              
+              # Unseal Vault
+              echo "Unsealing Vault..."
+              vault operator unseal -address=http://{{ include "vault.fullname" . }}:8200 $KEY1
+              vault operator unseal -address=http://{{ include "vault.fullname" . }}:8200 $KEY2
+              vault operator unseal -address=http://{{ include "vault.fullname" . }}:8200 $KEY3
+              
+              # Check if Vault is unsealed
+              if vault status -address=http://{{ include "vault.fullname" . }}:8200 | grep -q "Sealed.*false"; then
+                echo "Vault successfully unsealed"
+              else
+                echo "Failed to unseal Vault"
+                exit 1
+              fi
+          env:
+            {{- range $key, $value := .Values.autoUnseal.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          restartPolicy: OnFailure
+      backoffLimit: {{ .Values.autoUnseal.backoffLimit }}
+  backoffLimit: 1
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "vault.fullname" . }}-auto-unseal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vault.labels" . | nindent 4 }}
+spec:
+  schedule: "{{ .Values.autoUnseal.schedule }}"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: {{ include "vault.serviceAccountName" . }}
+          containers:
+            - name: vault-auto-unseal
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  # Check if Vault is sealed
+                  if vault status -address=http://{{ include "vault.fullname" . }}:8200 | grep -q "Sealed.*true"; then
+                    echo "Vault is sealed, attempting to unseal..."
+                    
+                    # Get unseal keys from secret
+                    KEY1=$(kubectl get secret {{ include "vault.fullname" . }}-unseal-keys -n {{ .Release.Namespace }} -o jsonpath='{.data.key1}' | base64 -d)
+                    KEY2=$(kubectl get secret {{ include "vault.fullname" . }}-unseal-keys -n {{ .Release.Namespace }} -o jsonpath='{.data.key2}' | base64 -d)
+                    KEY3=$(kubectl get secret {{ include "vault.fullname" . }}-unseal-keys -n {{ .Release.Namespace }} -o jsonpath='{.data.key3}' | base64 -d)
+                    
+                    # Unseal Vault
+                    vault operator unseal -address=http://{{ include "vault.fullname" . }}:8200 $KEY1
+                    vault operator unseal -address=http://{{ include "vault.fullname" . }}:8200 $KEY2
+                    vault operator unseal -address=http://{{ include "vault.fullname" . }}:8200 $KEY3
+                    
+                    # Check if Vault is unsealed
+                    if vault status -address=http://{{ include "vault.fullname" . }}:8200 | grep -q "Sealed.*false"; then
+                      echo "Vault successfully unsealed"
+                    else
+                      echo "Failed to unseal Vault"
+                    fi
+                  else
+                    echo "Vault is already unsealed"
+                  fi
+              env:
+                {{- range $key, $value := .Values.autoUnseal.env }}
+                - name: {{ $key }}
+                  value: {{ $value | quote }}
+                {{- end }}
+              restartPolicy: OnFailure
+          backoffLimit: {{ .Values.autoUnseal.backoffLimit }}
+{{- end -}}

@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "vault.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vault.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "vault.fullname" . }}
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "vault.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vault.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "vault.serviceAccountName" . }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      containers:
+        - name: vault
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "server"
+            - "-config-file=/vault/config/vault.hcl"
+          env:
+            - name: VAULT_ADDR
+              value: "http://127.0.0.1:8200"
+            - name: VAULT_API_ADDR
+              value: "http://$(POD_IP):8200"
+            - name: VAULT_CLUSTER_ADDR
+              value: "https://$(HOSTNAME).vault:8201"
+            - name: VAULT_K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: VAULT_K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          ports:
+            - containerPort: {{ .Values.service.ports.http.targetPort }}
+              name: http
+              protocol: TCP
+            - containerPort: {{ .Values.service.ports.cluster.targetPort }}
+              name: internal-cluster
+              protocol: TCP
+          volumeMounts:
+            - name: vault-config
+              mountPath: /vault/config
+              readOnly: true
+            - name: vault-file
+              mountPath: /vault/file
+              readOnly: false
+          {{- if .Values.securityContext }}
+          securityContext:
+{{ toYaml .Values.securityContext | indent 12 }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /v1/sys/health?standbyok=true
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 2
+          readinessProbe:
+            httpGet:
+              path: /v1/sys/health?standbyok=true
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: vault-file
+      spec:
+        accessModes: [ "{{ .Values.storage.accessMode }}" ]
+        storageClassName: "{{ .Values.storage.className }}"
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}
