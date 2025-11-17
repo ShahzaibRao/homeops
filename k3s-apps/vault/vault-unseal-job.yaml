@@ -1,0 +1,94 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-unseal
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/instance: vault
+spec:
+  template:
+    spec:
+      serviceAccountName: vault
+      containers:
+        - name: vault-unseal
+          image: hashicorp/vault:1.15.0
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # Get unseal keys from secret
+              KEY1=$(kubectl get secret vault-unseal-keys -n vault -o jsonpath='{.data.key1}' | base64 -d)
+              KEY2=$(kubectl get secret vault-unseal-keys -n vault -o jsonpath='{.data.key2}' | base64 -d)
+              KEY3=$(kubectl get secret vault-unseal-keys -n vault -o jsonpath='{.data.key3}' | base64 -d)
+              
+              # Unseal Vault
+              echo "Unsealing Vault..."
+              vault operator unseal -address=http://vault:8200 $KEY1
+              vault operator unseal -address=http://vault:8200 $KEY2
+              vault operator unseal -address=http://vault:8200 $KEY3
+              
+              # Check if Vault is unsealed
+              if vault status -address=http://vault:8200 | grep -q "Sealed.*false"; then
+                echo "Vault successfully unsealed"
+              else
+                echo "Failed to unseal Vault"
+                exit 1
+              fi
+          env:
+            - name: VAULT_ADDR
+              value: "http://vault:8200"
+          restartPolicy: OnFailure
+      backoffLimit: 6
+  backoffLimit: 1
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vault-auto-unseal
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/instance: vault
+spec:
+  schedule: "*/30 * * * *"  # Every 30 minutes
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: vault
+          containers:
+            - name: vault-auto-unseal
+              image: hashicorp/vault:1.15.0
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  # Check if Vault is sealed
+                  if vault status -address=http://vault:8200 | grep -q "Sealed.*true"; then
+                    echo "Vault is sealed, attempting to unseal..."
+                    
+                    # Get unseal keys from secret
+                    KEY1=$(kubectl get secret vault-unseal-keys -n vault -o jsonpath='{.data.key1}' | base64 -d)
+                    KEY2=$(kubectl get secret vault-unseal-keys -n vault -o jsonpath='{.data.key2}' | base64 -d)
+                    KEY3=$(kubectl get secret vault-unseal-keys -n vault -o jsonpath='{.data.key3}' | base64 -d)
+                    
+                    # Unseal Vault
+                    vault operator unseal -address=http://vault:8200 $KEY1
+                    vault operator unseal -address=http://vault:8200 $KEY2
+                    vault operator unseal -address=http://vault:8200 $KEY3
+                    
+                    # Check if Vault is unsealed
+                    if vault status -address=http://vault:8200 | grep -q "Sealed.*false"; then
+                      echo "Vault successfully unsealed"
+                    else
+                      echo "Failed to unseal Vault"
+                    fi
+                  else
+                    echo "Vault is already unsealed"
+                  fi
+              env:
+                - name: VAULT_ADDR
+                  value: "http://vault:8200"
+              restartPolicy: OnFailure
+          backoffLimit: 2
