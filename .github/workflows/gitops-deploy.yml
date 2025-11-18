@@ -33,15 +33,7 @@ jobs:
             --namespace argocd --create-namespace \
             --set server.service.type=LoadBalancer
 
-      - name: 🔐 Bootstrap GitHub Secret Store
-        env:
-          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
-        run: |
-          kubectl create ns external-secrets --dry-run=client -o yaml | kubectl apply -f -
-          kubectl -n external-secrets create secret generic github-secret-store \
-            --from-literal=token="$GITHUB_PAT" \
-            --dry-run=client -o yaml | kubectl apply -f -
-
+      
       # 👇 Add these two steps (App-of-Apps + ApplicationSet)
       - name: 🚀 Apply ArgoCD Root App (App-of-Apps)
         run: |
