@@ -1,0 +1,44 @@
+controller:
+  replicaCount: 1
+  image:
+    repository: bitnami/sealed-secrets-controller
+    tag: v2.8.1
+    pullPolicy: IfNotPresent
+  
+  serviceAccount:
+    create: true
+    name: sealed-secrets-controller
+  
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}
+  
+  service:
+    type: ClusterIP
+    port: 8080
+  
+  ingress:
+    enabled: false
+  
+  extraArgs: []
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  priorityClassName: ""
+  
+  metrics:
+    enabled: false
+    serviceMonitor:
+      enabled: false
+      namespace: ""
+      additionalLabels: {}

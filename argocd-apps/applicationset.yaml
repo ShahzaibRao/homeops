@@ -8,7 +8,6 @@ spec:
   generators:
     - list:
         elements:
-          - name: cloudflare
 
   template:
     metadata:
