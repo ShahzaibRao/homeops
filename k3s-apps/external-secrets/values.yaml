@@ -1,0 +1,8 @@
+external-secrets:
+  installCRDs: true
+  serviceAccount:
+    create: true
+  # Optional: disable webhook for lab simplicity
+  webhook:
+    enabled: false
+  # We'll mount age key later
