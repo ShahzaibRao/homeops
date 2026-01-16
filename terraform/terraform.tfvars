@@ -1,10 +1,10 @@
 vms = {
-  "master-k3s" = {
-    node       = "pve1"
+  "gitlab" = {
+    node       = "pve2"
     cores      = 4
-    memory     = 7168
-    disk_size  = "30G"
-    ip_address = "192.168.2.199"
+    memory     = 3072
+    disk_size  = "50G"
+    ip_address = "192.168.2.91"
   }
 }
 
