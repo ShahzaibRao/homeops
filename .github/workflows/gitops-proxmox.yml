@@ -61,10 +61,10 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           git stash -u
-          git pull origin main --rebase
+          git pull origin staging --rebase
           git stash pop
           git add .
-          git diff-index --quiet HEAD || (git commit -m "Automated: Fix terraform formatting" && git push origin HEAD:main)
+          git diff-index --quiet HEAD || (git commit -m "Automated: Fix terraform formatting" && git push origin HEAD:staging)
         continue-on-error: true
 
       - name: Terraform Validate
@@ -81,7 +81,7 @@ jobs:
         run: exit 1
 
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/staging'
         run: terraform apply -auto-approve tfplan
 
       
@@ -94,7 +94,7 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           git stash -u
-          git pull origin main --rebase
+          git pull origin staging --rebase
           git stash pop
           git add ../ansible/k3s/inventory.ini 
-          git diff-index --quiet HEAD || (git commit -m "Update Ansible inventory after Terraform apply" && git push origin HEAD:main)
+          git diff-index --quiet HEAD || (git commit -m "Update Ansible inventory after Terraform apply" && git push origin HEAD:staging)
